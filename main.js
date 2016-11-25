@@ -7,8 +7,16 @@ require('aframe-meshline-component')
 
 window.onload = () => {
 
-	var graph = buildGraph(20, 40, 5, 5)
+	//var graph = buildGraph(20, 40, 1, 5)
+	//graphDraw(graph);
 
+	loadRemoteGraph(
+			"http://vatelier.net/MyDemo/newtooling/wiki_graph.json",
+			100,
+			graphDraw); // callsback
+}
+
+function graphDraw(graph){
 	var color = d3.scale.category20()
 
 	var scene = d3.select('a-scene')
@@ -49,34 +57,80 @@ window.onload = () => {
 	        return `lineWidth: 1; path: ${sourcePoint.join(' ')}, ${targetPoint.join(' ')}}; color: #ccc`
 	    })
 	})
+}
 
-	function point(p) {
-	    return [p.x, p.y, p.z]
+function point(p) {
+    return [p.x, p.y, p.z]
+}
+
+function buildGraph(nodes, links, groups, maxWeight) {
+
+    let data = {
+	nodes: [],
+	links: []
+    }
+
+    for (let n = 0; n < nodes; n++) {
+	data.nodes.push({
+	    id: n,
+	    group: _.random(1, groups)
+	})
+    }
+
+    for (let l = 0; l < links; l++) {
+	data.links.push({
+	    source: _.random(0, nodes - 1),
+	    target: _.random(0, nodes - 1),
+	    value: _.random(1, maxWeight)
+	})
+    }
+
+    console.log(data)
+    return data
+
+}
+
+function loadRemoteGraph(myDataURL, MaxPages, draw){
+
+	let data = {
+		nodes: [],
+		links: []
 	}
 
-	function buildGraph(nodes, links, groups, maxWeight) {
+	var myRequest = new XMLHttpRequest();
+	myRequest.open('GET', myDataURL);
+	myRequest.onreadystatechange = function () {
+		if (myRequest.readyState === 4) {
+			var result = parseRemoteJSON(myRequest.responseText);
+			graphDraw(result);
+		}
+	};
+	myRequest.send();
 
-	    let data = {
-	        nodes: [],
-	        links: []
-	    }
+	function parseRemoteJSON(myJSON){
+		function matchId(element){
+			return element.title == this.toString()
+		}
 
-	    for (let n = 0; n < nodes; n++) {
-	        data.nodes.push({
-	            id: n,
-	            group: _.random(1, groups)
-	        })
-	    }
-
-	    for (let l = 0; l < links; l++) {
-	        data.links.push({
-	            source: _.random(0, nodes - 1),
-	            target: _.random(0, nodes - 1),
-	            value: _.random(1, maxWeight)
-	        })
-	    }
-
-	    return data
-
+		var dictionary = JSON.parse(myJSON).Nodes;
+		var keys = [];
+		keys = Object.keys(dictionary);
+		for (var i=0; i<MaxPages; i++){
+			var page = dictionary[keys[i+1]];
+			data.nodes.push({id: i, title: page.Id, group: page.Group});
+		}
+		for (var i=0; i<MaxPages; i++){
+			var page = dictionary[keys[i+1]];
+			if (page.Targets){
+				for (var j=0; j<page.Targets.length; j++){
+					var target = data.nodes.findIndex(matchId, page.Targets[j])
+					if (target >= 0) // should parse once but... you know...
+					data.links.push({source: i,
+							target: target,
+							weight: 1});
+				}
+			}
+		} 
+		draw(data)
 	}
 }
